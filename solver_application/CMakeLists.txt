@@ -8,3 +8,7 @@ target_link_libraries(solver PRIVATE
     formatter_ex
     solver_lib
 )
+
+install(TARGETS solver
+    RUNTIME DESTINATION bin
+)

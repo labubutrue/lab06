@@ -8,3 +8,11 @@ cmake_install.cmake
 Makefile
 .DS_Store
 .idea/
+_CPack_Packages/
+*.deb
+*.rpm
+*.msi
+*.dmg
+*.zip
+*.tar.gz
+artifacts/

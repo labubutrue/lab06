@@ -1,0 +1,149 @@
+name: Build packages and release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Linux packages
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ rpm
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Build DEB
+        working-directory: build
+        run: cpack -G DEB
+
+      - name: Build RPM
+        working-directory: build
+        run: cpack -G RPM
+
+      - name: Build source TGZ
+        working-directory: build
+        run: cpack --config CPackSourceConfig.cmake -G TGZ
+
+      - name: Build source ZIP
+        working-directory: build
+        run: cpack --config CPackSourceConfig.cmake -G ZIP
+
+      - name: Show packages
+        run: find build -maxdepth 1 -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.zip" \) -print
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            build/*.deb
+            build/*.rpm
+            build/*.tar.gz
+            build/*.zip
+          if-no-files-found: error
+
+  macos:
+    name: macOS DMG
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Build DMG
+        working-directory: build
+        run: cpack -G DragNDrop
+
+      - name: Show package
+        run: find build -maxdepth 1 -type f -name "*.dmg" -print
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-package
+          path: build/*.dmg
+          if-no-files-found: error
+
+  windows:
+    name: Windows MSI
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install WiX
+        shell: powershell
+        run: choco install wixtoolset --no-progress -y
+
+      - name: Configure
+        run: cmake -S . -B build
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Build MSI
+        working-directory: build
+        run: cpack -C Release -G WIX
+
+      - name: Show package
+        shell: powershell
+        run: Get-ChildItem build -Filter *.msi
+
+      - name: Upload MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-package
+          path: build/*.msi
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs:
+      - linux
+      - macos
+      - windows
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Show release files
+        run: find artifacts -maxdepth 1 -type f -print
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/*.deb
+            artifacts/*.rpm
+            artifacts/*.msi
+            artifacts/*.dmg
+            artifacts/*.tar.gz
+            artifacts/*.zip
